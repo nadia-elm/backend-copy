@@ -57,69 +57,74 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// add to favorites
-
 router.post('/favorites', authenticateJWT, async (req, res, next) => {
-  console.log(req.user);
   try {
-    const { userId, productId } = req.body;
-    console.log(req.body);
-    if (req.user.userId !== userId) {
-      console.log(req.user.userId, userId);
-      res.status(401).json({ message: 'Unauthorized' });
-    }
+    const { productId } = req.body;
+    const userId = req.user.userId; // Get userId from the token
+
     await db.query(
       'INSERT INTO favorites(user_id, product_id) VALUES($1, $2) RETURNING *',
       [userId, productId]
     );
+    res.status(200).json({ message: 'Product added to favorites' });
   } catch (error) {
     next(error);
   }
 });
 
-// get favorites
 router.get('/favorites', authenticateJWT, async (req, res, next) => {
   try {
-    const { userId, productId } = req.query;
-    console.log('User ID from Token:', req.user.userId, typeof req.user.userId);
-    console.log('User ID from Request Body:', userId, typeof userId);
+    const userId = req.user.userId; // Get userId from the token
 
-    if (Number(req.user.userId) !== Number(userId)) {
-      // Ensure both are numbers before comparison
-      console.log('Unauthorized: User ID mismatch');
-      return res.status(401).json({ message: 'Unauthorized' }); // Added return to prevent further execution
-    }
-    // if (req.user.userId !== userId) {
-    //   res.status(401).json({ message: 'Unauthorized' });
-    // }
     const response = await db.query(
-      'SELECT * FROM favorites WHERE user_id = $1 AND product_id = $2',
-      [userId, productId]
+      'SELECT p.* FROM favorites f JOIN products p ON f.product_id = p.id WHERE f.user_id = $1',
+      [userId]
     );
-    if (response.rows.length > 0) {
-      return res.json({ isFavorite: true });
-    } else {
-      return res.json({ isFavorite: false });
-    }
-    res.json(response.rows);
+    res.status(200).json(response.rows);
   } catch (error) {
     next(error);
   }
 });
 
+// Check if a product is in favorites
+router.get(
+  '/favorites/check/:productId',
+  authenticateJWT,
+  async (req, res, next) => {
+    try {
+      const userId = req.user.userId; // Get userId from the token
+      const { productId } = req.params; // Get productId from the URL parameter
+
+      const response = await db.query(
+        'SELECT * FROM favorites WHERE user_id = $1 AND product_id = $2',
+        [userId, productId]
+      );
+
+      if (response.rows.length > 0) {
+        return res.json({ isFavorite: true });
+      } else {
+        return res.json({ isFavorite: false });
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+//
 router.delete('/favorites', authenticateJWT, async (req, res, next) => {
   try {
-    const { userId, productId } = req.body;
-    if (req.user.userId !== userId) {
-      res.status(401).json({ message: 'Unauthorized' });
-    }
+    const { productId } = req.body;
+    const userId = req.user.userId; // Get userId from the token
+
     await db.query(
       'DELETE FROM favorites WHERE user_id = $1 AND product_id = $2',
       [userId, productId]
     );
-    res.json({ message: 'Removed from favorites' });
+    res.status(200).json({ message: 'Removed from favorites' });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 });
+
 module.exports = router;
